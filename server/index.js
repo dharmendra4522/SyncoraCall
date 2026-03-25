@@ -27,7 +27,7 @@ const server = createServer(app);
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
-  "https://syncoracall.vercel.app",
+  "https://syncora-call.vercel.app",
 ].filter(Boolean);
 
 console.log("Allowed Origins:", allowedOrigins);
