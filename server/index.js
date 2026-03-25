@@ -15,7 +15,7 @@ import dbConnection from "./db/dbConnect.js"; // Import function to connect to M
 dotenv.config();
 
 // 🌍 Create an Express application
-const app = express(); 
+const app = express();
 
 // 🔧 Set up server port (from `.env` or default to 3000)
 const PORT = process.env.PORT || 3000;
@@ -27,26 +27,31 @@ const server = createServer(app);
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
-  "http://localhost:5174"
+  "https://syncoracall.vercel.app",
 ].filter(Boolean);
 
-console.log("Allowed Origins:", allowedOrigins); 
+console.log("Allowed Origins:", allowedOrigins);
 
 // 🔧 Middleware to handle CORS
-app.use(cors({
-  origin: function (origin, callback) { 
-    // Remove trailing slashes for exact matches (some browsers/tools might include them)
-    const sanitizedOrigin = origin ? origin.replace(/\/$/, '') : null;
-    if (!sanitizedOrigin || allowedOrigins.some(o => o.replace(/\/$/, '') === sanitizedOrigin)) { 
-      callback(null, true);
-    } else {
-      console.warn(`[CORS] Rejected blocking from: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Remove trailing slashes for exact matches (some browsers/tools might include them)
+      const sanitizedOrigin = origin ? origin.replace(/\/$/, "") : null;
+      if (
+        !sanitizedOrigin ||
+        allowedOrigins.some((o) => o.replace(/\/$/, "") === sanitizedOrigin)
+      ) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Rejected blocking from: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  }),
+);
 
 // 🛠 Middleware for handling JSON requests and cookies
 app.use(express.json()); // Enables parsing of JSON request bodies
@@ -63,10 +68,10 @@ app.get("/ok", (req, res) => {
 
 // 🔥 Initialize Socket.io for real-time communication
 const io = new Server(server, {
-  pingTimeout: 60000, // ⏳ Set timeout for inactive users (1 minute)
+  pingTimeout: 60000,
   cors: {
-    origin: allowedOrigins, 
-    methods: ["GET", "POST"], 
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
   },
 });
 console.log("[SUCCESS] Socket.io initialized with CORS"); // Debugging message
@@ -112,7 +117,8 @@ io.on("connection", (socket) => {
   socket.on("join-room", (roomID) => {
     if (usersInRoom[roomID]) {
       const length = usersInRoom[roomID].length;
-      if (length === 10) { // Limit to 10 users for performance
+      if (length === 10) {
+        // Limit to 10 users for performance
         socket.emit("room-full");
         return;
       }
@@ -121,7 +127,9 @@ io.on("connection", (socket) => {
       usersInRoom[roomID] = [socket.id];
     }
     socketToRoom[socket.id] = roomID;
-    const usersInThisRoom = usersInRoom[roomID].filter((id) => id !== socket.id);
+    const usersInThisRoom = usersInRoom[roomID].filter(
+      (id) => id !== socket.id,
+    );
 
     socket.emit("all-users", usersInThisRoom);
   });
@@ -131,14 +139,14 @@ io.on("connection", (socket) => {
       signal: payload.signal,
       callerID: payload.callerID,
       username: payload.username,
-      profilepic: payload.profilepic
+      profilepic: payload.profilepic,
     });
   });
 
   socket.on("returning-signal", (payload) => {
     io.to(payload.callerID).emit("receiving-returned-signal", {
       signal: payload.signal,
-      id: socket.id
+      id: socket.id,
     });
   });
 
@@ -166,7 +174,7 @@ io.on("connection", (socket) => {
 
     // 🔥 Remove user from the online users list
     onlineUsers = onlineUsers.filter((user) => user.socketId !== socket.id);
-    
+
     // 🔹 Broadcast updated online users list
     io.emit("online-users", onlineUsers);
 
@@ -180,11 +188,13 @@ io.on("connection", (socket) => {
 // 🏁 Start the server immediately
 server.listen(PORT, () => {
   console.log(`✅ Server is running on port ${PORT}`);
-  
+
   // 🟢 Connect to the database in the background
-  dbConnection().then(() => {
-    console.log("✅ Database connected successfully");
-  }).catch((error) => {
-    console.error("❌ Background Database Connection Failed:", error.message);
-  });
+  dbConnection()
+    .then(() => {
+      console.log("✅ Database connected successfully");
+    })
+    .catch((error) => {
+      console.error("❌ Background Database Connection Failed:", error.message);
+    });
 });
