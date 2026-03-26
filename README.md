@@ -47,8 +47,8 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/dharmendra4522/Syncora.git
-   cd Syncora
+   git clone https://github.com/dharmendra4522/SyncoraCall.git
+   cd SyncoraCall
    ```
 
 2. **Backend Setup:**
@@ -77,11 +77,11 @@ To run this project, you will need to add the following environment variables to
 - `PORT`: 3000
 - `MONGOOSE_CONNECTION`: Your MongoDB URI
 - `JWT_SECRET`: A secure random string
-- `FRONTEND_URL`: http://localhost:5173
+- `FRONTEND_URL`: https://syncora-call.vercel.app/
 
 **Client (`/client/.env`):**
-- `VITE_API_BASE_URL`: http://localhost:3000/api/
-- `VITE_API_SOCKET_URL`: http://localhost:3000
+- `VITE_API_BASE_URL`: https://syncoracall-backend.onrender.com/api/
+- `VITE_API_SOCKET_URL`: https://syncoracall-backend.onrender.com
 
 ---
 
@@ -107,7 +107,7 @@ SyncoraCall was designed with a focus on "Premium Aesthetics":
 
 **Dharmendra Vishwakarma**  
 *Full Stack Developer*  
-[LinkedIn](https://www.linkedin.com/in/dharmendra-vishwakarma-0711/) | [Email](mailto:dharmendravishwakarma0711@gmail.com)
+[LinkedIn](https://www.linkedin.com/in/dharmendra-vishvkarma-969a1924a/) | [Email](mailto:dharmendravishwakarma0711@gmail.com) | [Portfolio](https://dharmendra-vishvkarma.vercel.app/)
 
 ---
 
