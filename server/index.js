@@ -100,12 +100,14 @@ io.on("connection", (socket) => {
     const existingUser = onlineUsers.find((u) => u.userId === user.id); // Check if user is already online
 
     if (existingUser) {
-      existingUser.socketId = socket.id; // Update socket ID if user reconnects
+      existingUser.socketId = socket.id;
+      existingUser.profilepic = user.profilepic; // Update pic
     } else {
       // 🟢 Add new user to online users list
       onlineUsers.push({
         userId: user.id,
         name: user.name,
+        profilepic: user.profilepic,
         socketId: socket.id,
       });
     }
@@ -127,9 +129,18 @@ io.on("connection", (socket) => {
       usersInRoom[roomID] = [socket.id];
     }
     socketToRoom[socket.id] = roomID;
-    const usersInThisRoom = usersInRoom[roomID].filter(
-      (id) => id !== socket.id,
-    );
+    
+    // 🔍 Get metadata for everyone in the room to send back to the new joiner
+    const usersInThisRoom = usersInRoom[roomID]
+      .filter((id) => id !== socket.id)
+      .map(id => {
+        const u = onlineUsers.find(user => user.socketId === id);
+        return {
+          id,
+          username: u?.name || "Participant",
+          profilepic: u?.profilepic || `https://api.dicebear.com/7.x/adventurer/svg?seed=user`
+        };
+      });
 
     socket.emit("all-users", usersInThisRoom);
   });
@@ -174,6 +185,18 @@ io.on("connection", (socket) => {
 
     // 🔥 Remove user from the online users list
     onlineUsers = onlineUsers.filter((user) => user.socketId !== socket.id);
+
+    // 🧹 Clean up user from rooms
+    const roomID = socketToRoom[socket.id];
+    if (roomID) {
+      if (usersInRoom[roomID]) {
+        usersInRoom[roomID] = usersInRoom[roomID].filter(id => id !== socket.id);
+        if (usersInRoom[roomID].length === 0) {
+          delete usersInRoom[roomID];
+        }
+      }
+      delete socketToRoom[socket.id];
+    }
 
     // 🔹 Broadcast updated online users list
     io.emit("online-users", onlineUsers);

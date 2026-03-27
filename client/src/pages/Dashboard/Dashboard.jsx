@@ -12,24 +12,43 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Peer from 'simple-peer';
 
-const VideoParticipant = (props) => {
+const VideoParticipant = React.memo((props) => {
   const ref = useRef();
   useEffect(() => {
     if (props.peer) {
-        props.peer.on("stream", stream => {
-            if (ref.current) ref.current.srcObject = stream;
-        });
+      const handleStream = (stream) => {
+        if (ref.current) {
+          ref.current.srcObject = stream;
+        }
+      };
+      props.peer.on("stream", handleStream);
+      
+      // If the peer already has streams, use the first one
+      if (props.peer.streams && props.peer.streams[0]) {
+        handleStream(props.peer.streams[0]);
+      }
+      
+      return () => {
+        props.peer.off("stream", handleStream);
+      };
     }
   }, [props.peer]);
+
   return (
-    <div className="relative w-full h-full">
-      <video playsInline autoPlay ref={ref} className="w-full h-full object-cover rounded-3xl border-2 border-slate-800" />
-      <div className="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded-full text-xs font-bold">
+    <div className="relative w-full h-full overflow-hidden">
+      <video 
+        playsInline 
+        autoPlay 
+        ref={ref} 
+        className="w-full h-full object-cover rounded-3xl border-2 border-slate-800 bg-slate-900" 
+      />
+      <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] md:text-xs font-bold text-white z-10">
         {props.username || "Participant"}
       </div>
     </div>
   );
-};
+});
+VideoParticipant.displayName = 'VideoParticipant';
 
 const Dashboard = () => {
   const { user, updateUser } = useUser();
@@ -79,6 +98,10 @@ const Dashboard = () => {
   }, []);
 
   const allusers = useCallback(async () => {
+    if (user?.isGuest) {
+      setUsers([]);
+      return;
+    }
     setLoading(true);
     try {
       const response = await apiClient.get('user');
@@ -96,7 +119,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.isGuest]);
 
   const endCallCleanup = useCallback(() => {
     console.log("🔴 Cleaning up call...");
@@ -135,10 +158,22 @@ const Dashboard = () => {
     setRoomID("");
   }, [stream]);
 
+  // 🛡 STUN/TURN Configuration for better connectivity
+  const peerConfig = {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" },
+      { urls: "stun:stun3.l.google.com:19302" },
+      { urls: "stun:stun4.l.google.com:19302" },
+    ],
+  };
+
   const createPeer = useCallback((userToSignal, callerID, currentStream) => {
     const peer = new Peer({
       initiator: true,
       trickle: false,
+      config: peerConfig,
       stream: currentStream,
     });
 
@@ -159,6 +194,7 @@ const Dashboard = () => {
     const peer = new Peer({
       initiator: false,
       trickle: false,
+      config: peerConfig,
       stream: currentStream,
     });
 
@@ -180,7 +216,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (user && socket && !hasJoined.current) {
-      socket.emit("join", { id: user._id, name: user.username });
+      socket.emit("join", { id: user._id, name: user.username, profilepic: user.profilepic });
       hasJoined.current = true;
     }
 
@@ -188,17 +224,17 @@ const Dashboard = () => {
         socket.on("me", () => { /* Ignore for now */ });
       if (socket.id) { /* Ignore for now */ }
 
-      socket.on("all-users", (users) => {
-        console.log("Joined room, users present:", users);
+      socket.on("all-users", (roomUsers) => {
+        console.log("Joined room, users present:", roomUsers);
         const newPeers = [];
-        users.forEach((userID) => {
-          const peer = createPeer(userID, socket.id, stream);
-          peersRef.current.push({ peerID: userID, peer });
+        roomUsers.forEach((userData) => {
+          const peer = createPeer(userData.id, socket.id, stream);
+          peersRef.current.push({ peerID: userData.id, peer });
           newPeers.push({
-            peerID: userID,
+            peerID: userData.id,
             peer,
-            username: "Participant",
-            profilepic: "https://api.dicebear.com/7.x/adventurer/svg?seed=user"
+            username: userData.username,
+            profilepic: userData.profilepic
           });
         });
         setPeers(newPeers);
@@ -265,7 +301,27 @@ const Dashboard = () => {
   const joinMeeting = async (customRoomID = null) => {
     try {
       const roomToJoin = customRoomID || roomID || Math.random().toString(36).substring(7);
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      
+      // 📱 Constrain video resolution for better mobile performance
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const videoConstraints = isMobile 
+        ? { 
+            width: { ideal: 480 }, 
+            height: { ideal: 360 }, 
+            frameRate: { max: 24 },
+            facingMode: "user"
+          } 
+        : { 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 },
+            facingMode: "user"
+          };
+
+      const currentStream = await navigator.mediaDevices.getUserMedia({ 
+        video: videoConstraints, 
+        audio: true 
+      });
+
       setStream(currentStream);
       setCallAccepted(true);
       setRoomID(roomToJoin);
@@ -274,7 +330,7 @@ const Dashboard = () => {
       toast.success("Joined Meeting: " + roomToJoin);
     } catch (err) {
       console.error("Media access error:", err);
-      toast.error("Could not access camera/microphone");
+      toast.error("Could not access camera/microphone. Please ensure permissions are granted.");
     }
   };
 
@@ -444,49 +500,63 @@ const Dashboard = () => {
            </div>
         </div>
 
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Contacts</div>
-        
-        {/* Search */}
-        <div className="relative mb-4">
-          <input
-            type="text"
-            placeholder="Search contacts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-slate-800 text-white border border-slate-700 focus:border-blue-500 outline-none text-sm"
-          />
-        </div>
+        {!user?.isGuest && (
+          <>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Contacts</div>
+            
+            {/* Search */}
+            <div className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Search contacts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-800 text-white border border-slate-700 focus:border-blue-500 outline-none text-sm"
+              />
+            </div>
 
-        {/* User List */}
-        <ul className="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
-          {loading && <p className="text-center text-sm text-gray-500 animate-pulse">Loading...</p>}
-          {!loading && filteredUsers.length === 0 && <p className="text-center text-sm text-gray-500">No contacts</p>}
-          {filteredUsers.map((userItem) => (
-            <li
-              key={userItem._id}
-              className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedUser === userItem._id
-                ? "bg-blue-600 shadow-lg shadow-blue-600/20"
-                : "bg-slate-800/50 hover:bg-slate-800 border border-transparent hover:border-slate-700"
-                }`}
-              onClick={() => handleSelectedUser(userItem._id)}
-            >
-              <div className="relative">
-                <img
-                  src={userItem.profilepic || "https://api.dicebear.com/7.x/adventurer/svg?seed=user"}
-                  alt="Avatar"
-                  className="w-10 h-10 rounded-full border-2 border-slate-900"
-                />
-                {isOnlineUser(userItem._id) && (
-                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full shadow-lg"></span>
-                )}
-              </div>
-              <div className="flex flex-col flex-1 min-w-0">
-                <span className="font-bold text-sm truncate">{userItem.username}</span>
-                <span className="text-[10px] text-slate-500 truncate">{userItem.email}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+            {/* User List */}
+            <ul className="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
+              {loading && <p className="text-center text-sm text-gray-500 animate-pulse">Loading...</p>}
+              {!loading && filteredUsers.length === 0 && <p className="text-center text-sm text-gray-500">No contacts</p>}
+              {filteredUsers.map((userItem) => (
+                <li
+                  key={userItem._id}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${selectedUser === userItem._id
+                    ? "bg-blue-600 shadow-lg shadow-blue-600/20"
+                    : "bg-slate-800/50 hover:bg-slate-800 border border-transparent hover:border-slate-700"
+                    }`}
+                  onClick={() => handleSelectedUser(userItem._id)}
+                >
+                  <div className="relative">
+                    <img
+                      src={userItem.profilepic || "https://api.dicebear.com/7.x/adventurer/svg?seed=user"}
+                      alt="Avatar"
+                      className="w-10 h-10 rounded-full border-2 border-slate-900"
+                    />
+                    {isOnlineUser(userItem._id) && (
+                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full shadow-lg"></span>
+                    )}
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="font-bold text-sm truncate">{userItem.username}</span>
+                    <span className="text-[10px] text-slate-500 truncate">{userItem.email}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        
+        {user?.isGuest && (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <div className="bg-blue-600/10 p-6 rounded-3xl mb-4">
+              <FaShieldAlt className="text-blue-500 text-3xl mx-auto" />
+            </div>
+            <p className="text-slate-400 text-sm font-medium">Guest Mode</p>
+            <p className="text-slate-600 text-[10px] mt-2 leading-relaxed">Login to save contacts and use direct calling features.</p>
+          </div>
+        )}
 
         {/* Logout */}
         {user && <button
@@ -572,7 +642,8 @@ const Dashboard = () => {
                 <Lottie animationData={wavingAnimation} />
              </div>
              <h1 className="text-6xl font-black mb-4 tracking-tighter">
-                Hello, <span className="bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text italic">{user?.username}</span>
+                Hello, <span className="bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text italic text-wrap">{user?.username}</span>
+                {user?.isGuest && <span className="ml-4 text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full align-middle font-bold tracking-widest border border-slate-700">GUEST</span>}
              </h1>
              <p className="text-xl text-slate-500 max-w-lg leading-relaxed">
                 Connect with anyone instantly. Use the sidebar to find a contact or start a new group meeting.
