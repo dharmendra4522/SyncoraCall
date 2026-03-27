@@ -228,6 +228,9 @@ const Dashboard = () => {
         console.log("Joined room, users present:", roomUsers);
         const newPeers = [];
         roomUsers.forEach((userData) => {
+          // 🛡 Filter out own socket ID just in case
+          if (userData.id === socket.id) return;
+          
           const peer = createPeer(userData.id, socket.id, stream);
           peersRef.current.push({ peerID: userData.id, peer });
           newPeers.push({
@@ -242,6 +245,9 @@ const Dashboard = () => {
 
       socket.on("user-joined", (payload) => {
         console.log("New user joining our room:", payload.callerID);
+        // 🛡 Avoid self-connection
+        if (payload.callerID === socket.id) return;
+
         const peer = addPeer(payload.signal, payload.callerID, stream);
         peersRef.current.push({ peerID: payload.callerID, peer });
         const newPeerObj = {
@@ -299,6 +305,12 @@ const Dashboard = () => {
   }, [user, socket, stream, endCallCleanup, createPeer, addPeer]);
 
   const joinMeeting = async (customRoomID = null) => {
+    if (stream) {
+        // If already in a meeting or stream exists, don't re-init stream to avoid abort error
+        socket.emit("join-room", customRoomID || roomID);
+        setCallAccepted(true);
+        return;
+    }
     try {
       const roomToJoin = customRoomID || roomID || Math.random().toString(36).substring(7);
       

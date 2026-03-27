@@ -144,7 +144,13 @@ io.on("connection", (socket) => {
           profilepic: u?.profilepic || `https://api.dicebear.com/7.x/adventurer/svg?seed=user`
         };
       })
-      .filter(u => u.userId !== newUser?.userId); // Prevent same user on different tabs from connecting
+      .filter(u => {
+        // Only filter by userId if it exists (for both users)
+        if (newUser?.userId && u.userId) {
+          return u.userId !== newUser.userId;
+        }
+        return true; 
+      });
 
     socket.emit("all-users", usersInThisRoom);
   });
