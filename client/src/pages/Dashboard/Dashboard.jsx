@@ -374,6 +374,10 @@ const Dashboard = () => {
   };
 
   const toggleScreenShare = () => {
+    if (!navigator.mediaDevices.getDisplayMedia) {
+      toast.error("Screen sharing is not supported on this device/browser");
+      return;
+    }
     if (!isScreenSharing) {
       navigator.mediaDevices.getDisplayMedia({ cursor: true }).then((screenStream) => {
         screenStreamRef.current = screenStream;
@@ -575,18 +579,32 @@ const Dashboard = () => {
             {/* Participant Grid */}
             <div className={`grid gap-4 w-full h-full ${
                 peers.length === 0 ? "grid-cols-1" :
-                peers.length === 1 ? "grid-cols-1 md:grid-cols-2" :
-                peers.length <= 3 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"
+                peers.length === 1 ? "grid-cols-1" :
+                peers.length === 2 ? "grid-cols-1 md:grid-cols-2" :
+                peers.length <= 4 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"
             }`}>
-              {/* Local Participant */}
-              <div className="relative w-full h-full group">
-                <video playsInline ref={myVideo} autoPlay muted className="w-full h-full object-cover rounded-3xl border-2 border-blue-600 shadow-2xl shadow-blue-600/10" />
-                <div className="absolute bottom-4 left-4 bg-blue-600 px-3 py-1 rounded-full text-xs font-black shadow-lg">You</div>
+              {/* Local Participant (Responsive PiP) */}
+              <div className={`${
+                peers.length === 1 
+                ? "fixed bottom-32 right-6 w-32 h-44 md:w-64 md:h-80 z-[80] shadow-3xl transform transition-all duration-500" 
+                : "relative w-full h-full"
+              } group`}>
+                <video 
+                  playsInline 
+                  ref={myVideo} 
+                  autoPlay 
+                  muted 
+                  className="w-full h-full object-cover rounded-3xl border-2 border-blue-600 shadow-2xl" 
+                  style={{ transform: 'scaleX(-1)' }}
+                />
+                <div className="absolute bottom-4 left-4 bg-blue-600 px-3 py-1 rounded-full text-[10px] font-black shadow-lg">You</div>
               </div>
 
               {/* Remote Participants */}
               {peers.map((peerObj) => (
-                <VideoParticipant key={peerObj.peerID} peer={peerObj.peer} username={peerObj.username} />
+                <div key={peerObj.peerID} className="w-full h-full peer-video-container">
+                    <VideoParticipant peer={peerObj.peer} username={peerObj.username} />
+                </div>
               ))}
               
               {/* Waiting UI for Direct Calls */}

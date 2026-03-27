@@ -130,17 +130,21 @@ io.on("connection", (socket) => {
     }
     socketToRoom[socket.id] = roomID;
     
-    // 🔍 Get metadata for everyone in the room to send back to the new joiner
+    // 🔍 Get metadata for everyone in the room. 
+    // Filter by both socket.id AND userId to prevent self-connection in multiple tabs
+    const newUser = onlineUsers.find(u => u.socketId === socket.id);
     const usersInThisRoom = usersInRoom[roomID]
       .filter((id) => id !== socket.id)
       .map(id => {
         const u = onlineUsers.find(user => user.socketId === id);
         return {
           id,
+          userId: u?.userId,
           username: u?.name || "Participant",
           profilepic: u?.profilepic || `https://api.dicebear.com/7.x/adventurer/svg?seed=user`
         };
-      });
+      })
+      .filter(u => u.userId !== newUser?.userId); // Prevent same user on different tabs from connecting
 
     socket.emit("all-users", usersInThisRoom);
   });
